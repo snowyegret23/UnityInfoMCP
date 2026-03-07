@@ -1,0 +1,150 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <Configurations>Release_BepInEx_Mono;Release_BepInEx_IL2CPP;Release_MelonLoader_Mono;Release_MelonLoader_IL2CPP</Configurations>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release_BepInEx_Mono'">
+    <TargetFramework>net35</TargetFramework>
+    <DefineConstants>TRACE;BEPINEX;MONO</DefineConstants>
+    <AssemblyName>UnityInfoBridge.BepInEx.Mono</AssemblyName>
+    <OutputPath>..\Release\UnityInfoBridge.BepInEx.Mono\</OutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release_BepInEx_IL2CPP'">
+    <TargetFramework>net6.0</TargetFramework>
+    <DefineConstants>TRACE;BEPINEX;IL2CPP</DefineConstants>
+    <AssemblyName>UnityInfoBridge.BepInEx.IL2CPP</AssemblyName>
+    <OutputPath>..\Release\UnityInfoBridge.BepInEx.IL2CPP\</OutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release_MelonLoader_Mono'">
+    <TargetFramework>net35</TargetFramework>
+    <DefineConstants>TRACE;MELONLOADER;MONO</DefineConstants>
+    <AssemblyName>UnityInfoBridge.MelonLoader.Mono</AssemblyName>
+    <OutputPath>..\Release\UnityInfoBridge.MelonLoader.Mono\</OutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release_MelonLoader_IL2CPP'">
+    <TargetFramework>net6.0</TargetFramework>
+    <DefineConstants>TRACE;MELONLOADER;IL2CPP</DefineConstants>
+    <AssemblyName>UnityInfoBridge.MelonLoader.IL2CPP</AssemblyName>
+    <OutputPath>..\Release\UnityInfoBridge.MelonLoader.IL2CPP\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)'=='net35'">
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net35" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)'=='Release_BepInEx_Mono'">
+    <Reference Include="BepInEx.Core">
+      <HintPath>..\includes\bepinex\mono\BepInEx.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.Common">
+      <HintPath>..\includes\bepinex\mono\BepInEx.Unity.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.Mono">
+      <HintPath>..\includes\bepinex\mono\BepInEx.Unity.Mono.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)'=='Release_BepInEx_IL2CPP'">
+    <Reference Include="BepInEx.Core">
+      <HintPath>..\includes\bepinex\il2cpp\BepInEx.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.Common">
+      <HintPath>..\includes\bepinex\il2cpp\BepInEx.Unity.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="BepInEx.Unity.IL2CPP">
+      <HintPath>..\includes\bepinex\il2cpp\BepInEx.Unity.IL2CPP.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>..\includes\bepinex\il2cpp\Il2CppInterop.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>..\includes\bepinex\il2cpp\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)'=='Release_MelonLoader_Mono'">
+    <Reference Include="MelonLoader">
+      <HintPath>..\includes\melonloader\mono\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(Configuration)'=='Release_MelonLoader_IL2CPP'">
+    <Reference Include="MelonLoader">
+      <HintPath>..\includes\melonloader\il2cpp\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>..\includes\melonloader\il2cpp\Il2CppInterop.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>..\includes\melonloader\il2cpp\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)'=='net35'">
+    <Reference Include="UnityEngine">
+      <HintPath>..\includes\unity\mono\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\includes\unity\mono\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)'=='net6.0'">
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>..\includes\unity\il2cpp\Il2Cppmscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppSystem.Core">
+      <HintPath>..\includes\unity\il2cpp\Il2CppSystem.Core.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>..\includes\unity\il2cpp\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>..\includes\unity\il2cpp\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UI">
+      <HintPath>..\includes\unity\il2cpp\UnityEngine.UI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.UIModule">
+      <HintPath>..\includes\unity\il2cpp\UnityEngine.UIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>..\includes\unity\il2cpp\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

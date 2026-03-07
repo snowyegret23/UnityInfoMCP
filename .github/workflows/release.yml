@@ -1,0 +1,145 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "릴리즈 버전 (예: 1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      VERSION: ${{ inputs.version }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install Python dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -e .
+
+      - name: Create PyInstaller entry script
+        shell: pwsh
+        run: |
+          @'
+          from UnityInfoMCP.__main__ import main
+
+          if __name__ == "__main__":
+              main()
+          '@ | Set-Content -Path build_entry.py -Encoding utf8
+
+      - name: Build UnityInfoMCP executable
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --clean --onefile `
+            --name "UnityInfoMCP_v${env:VERSION}" `
+            --paths . `
+            --collect-all mcp `
+            --collect-all uvicorn `
+            --collect-all starlette `
+            --collect-all anyio `
+            build_entry.py
+
+      - name: Build UnityInfoBridge variants
+        shell: pwsh
+        run: |
+          Set-Location UnityInfoBridge
+          .\build.ps1
+
+      - name: Prepare release artifacts
+        shell: pwsh
+        run: |
+          $version = $env:VERSION
+          $releaseRoot = Join-Path $PWD "release_artifacts"
+          $bridgeReleaseRoot = Join-Path $PWD "UnityInfoBridge\\Release"
+
+          function Ensure-Dir([string]$path) {
+            New-Item -ItemType Directory -Path $path -Force | Out-Null
+          }
+
+          function New-MelonLoaderZip([string]$runtime, [string]$sourceDll) {
+            if (-not (Test-Path $sourceDll)) {
+              throw "Missing build output: $sourceDll"
+            }
+
+            $packageRoot = Join-Path $releaseRoot "melonloader_${runtime}"
+            $modsDir = Join-Path $packageRoot "Mods"
+            $zipPath = Join-Path $PWD "UnityInfoBridge_v${version}_MelonLoader_${runtime}.zip"
+
+            Ensure-Dir $modsDir
+            Copy-Item -Path $sourceDll -Destination (Join-Path $modsDir "UnityInfoBridge.dll") -Force
+            if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+            Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $zipPath
+          }
+
+          function New-BepInExZip([string]$runtime, [string]$sourceDll) {
+            if (-not (Test-Path $sourceDll)) {
+              throw "Missing build output: $sourceDll"
+            }
+
+            $packageRoot = Join-Path $releaseRoot "bepinex_${runtime}"
+            $pluginDir = Join-Path $packageRoot "BepInEx\\plugins\\UnityInfoBridge"
+            $zipPath = Join-Path $PWD "UnityInfoBridge_v${version}_BepInEx_${runtime}.zip"
+
+            Ensure-Dir $pluginDir
+            Copy-Item -Path $sourceDll -Destination (Join-Path $pluginDir "UnityInfoBridge.dll") -Force
+            if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
+            Compress-Archive -Path (Join-Path $packageRoot "*") -DestinationPath $zipPath
+          }
+
+          $melonMonoDll = Join-Path $bridgeReleaseRoot "UnityInfoBridge.MelonLoader.Mono\\UnityInfoBridge.MelonLoader.Mono.dll"
+          $melonIl2CppDll = Join-Path $bridgeReleaseRoot "UnityInfoBridge.MelonLoader.IL2CPP\\UnityInfoBridge.MelonLoader.IL2CPP.dll"
+          $bepMonoDll = Join-Path $bridgeReleaseRoot "UnityInfoBridge.BepInEx.Mono\\UnityInfoBridge.BepInEx.Mono.dll"
+          $bepIl2CppDll = Join-Path $bridgeReleaseRoot "UnityInfoBridge.BepInEx.IL2CPP\\UnityInfoBridge.BepInEx.IL2CPP.dll"
+
+          Ensure-Dir $releaseRoot
+          Copy-Item -Path (Join-Path $PWD "dist\\UnityInfoMCP_v${version}.exe") -Destination (Join-Path $PWD "UnityInfoMCP_v${version}.exe") -Force
+
+          New-MelonLoaderZip "Mono" $melonMonoDll
+          New-MelonLoaderZip "IL2CPP" $melonIl2CppDll
+          New-BepInExZip "Mono" $bepMonoDll
+          New-BepInExZip "IL2CPP" $bepIl2CppDll
+
+      - name: Create tag
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag v${env:VERSION} ${{ github.sha }}
+          git push origin v${env:VERSION}
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            UnityInfoMCP_v${{ inputs.version }}.exe
+            UnityInfoBridge_v${{ inputs.version }}_MelonLoader_Mono.zip
+            UnityInfoBridge_v${{ inputs.version }}_MelonLoader_IL2CPP.zip
+            UnityInfoBridge_v${{ inputs.version }}_BepInEx_Mono.zip
+            UnityInfoBridge_v${{ inputs.version }}_BepInEx_IL2CPP.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "unity-info-mcp"
+version = "1.0.0"
+description = "Standalone MCP server for Unity runtime inspection (modding/localization workflows)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "mcp>=1.6.0",
+]
+
+[project.scripts]
+unity-info-mcp = "UnityInfoMCP.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["UnityInfoMCP*"]
