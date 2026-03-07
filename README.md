@@ -87,6 +87,47 @@ Behavior:
 - default bind: `127.0.0.1:16000`
 - startup failure: prints the error and waits for `Enter` before exiting
 
+## MCP client configuration
+
+Recommended when `unity-info-mcp` is available on `PATH`:
+
+```toml
+[mcp_servers.UnityInfoMCP]
+command = "unity-info-mcp"
+args = []
+startup_timeout_sec = 45
+
+[mcp_servers.UnityInfoMCP.env]
+UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+UNITY_INFO_BRIDGE_PORT = "16000"
+```
+
+If you prefer to invoke the module directly:
+
+```toml
+[mcp_servers.UnityInfoMCP]
+command = "python"
+args = ["-m", "UnityInfoMCP"]
+startup_timeout_sec = 45
+
+[mcp_servers.UnityInfoMCP.env]
+UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+UNITY_INFO_BRIDGE_PORT = "16000"
+```
+
+If neither `unity-info-mcp` nor `python` is reliably on `PATH`, use an explicit interpreter path:
+
+```toml
+[mcp_servers.UnityInfoMCP]
+command = 'C:\path\to\.venv\Scripts\python.exe'
+args = ["-m", "UnityInfoMCP"]
+startup_timeout_sec = 45
+
+[mcp_servers.UnityInfoMCP.env]
+UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+UNITY_INFO_BRIDGE_PORT = "16000"
+```
+
 ## Environment variables
 
 - `UNITY_INFO_BRIDGE_TRANSPORT`

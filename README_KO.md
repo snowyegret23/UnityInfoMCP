@@ -87,6 +87,47 @@ unity-info-mcp --port 8080
 - 기본 바인드: `127.0.0.1:16000`
 - 시작 실패 시: 오류를 출력하고 `Enter` 입력을 기다린 뒤 종료
 
+## MCP 클라이언트 설정 예시
+
+`unity-info-mcp`가 `PATH`에 잡혀 있다면 이 방식이 가장 간단합니다.
+
+```toml
+[mcp_servers.UnityInfoMCP]
+command = "unity-info-mcp"
+args = []
+startup_timeout_sec = 45
+
+[mcp_servers.UnityInfoMCP.env]
+UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+UNITY_INFO_BRIDGE_PORT = "16000"
+```
+
+모듈을 직접 실행하고 싶다면:
+
+```toml
+[mcp_servers.UnityInfoMCP]
+command = "python"
+args = ["-m", "UnityInfoMCP"]
+startup_timeout_sec = 45
+
+[mcp_servers.UnityInfoMCP.env]
+UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+UNITY_INFO_BRIDGE_PORT = "16000"
+```
+
+`unity-info-mcp`나 `python`이 `PATH`에 안정적으로 없으면, 그때만 명시적 인터프리터 경로를 사용하면 됩니다.
+
+```toml
+[mcp_servers.UnityInfoMCP]
+command = 'C:\path\to\.venv\Scripts\python.exe'
+args = ["-m", "UnityInfoMCP"]
+startup_timeout_sec = 45
+
+[mcp_servers.UnityInfoMCP.env]
+UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+UNITY_INFO_BRIDGE_PORT = "16000"
+```
+
 ## 환경 변수
 
 - `UNITY_INFO_BRIDGE_TRANSPORT`
