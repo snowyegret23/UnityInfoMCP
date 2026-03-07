@@ -57,6 +57,12 @@ python -m venv .venv
 pip install -e .
 ```
 
+PyInstaller나 릴리즈 빌드를 할 때는 build extra로 설치하세요:
+
+```bash
+pip install -e ".[build]"
+```
+
 기본 HTTP 포트로 MCP 서버 실행:
 
 ```bash

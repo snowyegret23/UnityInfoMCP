@@ -57,6 +57,12 @@ python -m venv .venv
 pip install -e .
 ```
 
+For PyInstaller or release builds, install the build extra instead:
+
+```bash
+pip install -e ".[build]"
+```
+
 Run the MCP server on the default HTTP port:
 
 ```bash

@@ -12,6 +12,12 @@ dependencies = [
   "mcp>=1.6.0",
 ]
 
+[project.optional-dependencies]
+build = [
+  "mcp[cli]>=1.6.0",
+  "pyinstaller>=6.0",
+]
+
 [project.scripts]
 unity-info-mcp = "UnityInfoMCP.__main__:main"
 
