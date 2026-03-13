@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+import os
 from typing import Any, Literal
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.utilities.types import Image
+from mcp.types import CallToolResult, TextContent
 
 from .bridge_client import UnityBridgeClient
 from .config import BridgeConfig, ServerConfig
@@ -84,6 +88,68 @@ def _normalize_match_mode(mode: MatchMode) -> MatchMode:
 
 def _split_csv(raw: str) -> list[str]:
     return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _finalize_screenshot_payload(
+    response: dict[str, Any],
+    *,
+    requested_output_path: str | None,
+) -> dict[str, Any]:
+    payload = dict(response)
+    result = dict(payload.get("result") or {})
+    output_path = str(result.get("output_path") or "")
+    delete_after_read = requested_output_path is None and bool(output_path)
+    deleted = False
+
+    if delete_after_read and output_path:
+        try:
+            os.remove(output_path)
+            deleted = True
+        except OSError:
+            deleted = False
+
+    result["image_included"] = True
+    result["image_mime_type"] = "image/png"
+    result["ephemeral_file_deleted"] = deleted
+    result["output_path_exists"] = bool(output_path) and os.path.exists(output_path)
+    payload["result"] = result
+    return payload
+
+
+def _build_screenshot_tool_result(
+    response: dict[str, Any],
+    *,
+    requested_output_path: str | None,
+) -> dict[str, Any] | CallToolResult:
+    if not response.get("ok"):
+        return response
+
+    result = response.get("result")
+    if not isinstance(result, dict):
+        return response
+
+    output_path = str(result.get("output_path") or "")
+    if not output_path:
+        return response
+
+    try:
+        with open(output_path, "rb") as handle:
+            image_bytes = handle.read()
+    except OSError:
+        return response
+
+    payload = _finalize_screenshot_payload(
+        response,
+        requested_output_path=requested_output_path,
+    )
+
+    return CallToolResult(
+        content=[
+            Image(data=image_bytes, format="png").to_image_content(),
+            TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2)),
+        ],
+        structuredContent=payload,
+    )
 
 
 def _make_bridge_config(port: int, timeout_sec: float | None = None) -> BridgeConfig:
@@ -786,9 +852,9 @@ async def capture_screenshot(
     super_size: int = 1,
     overwrite: bool = True,
 ) -> dict[str, Any]:
-    """Capture current game screen and save PNG to disk."""
+    """Capture current game screen and return PNG image content for the MCP client."""
     super_size = _normalize_limit(super_size, default=1, minimum=1, maximum=8)
-    return await _invoke(
+    response = await _invoke(
         "capture_screenshot",
         {
             "output_path": output_path,
@@ -796,3 +862,4 @@ async def capture_screenshot(
             "overwrite": overwrite,
         },
     )
+    return _build_screenshot_tool_result(response, requested_output_path=output_path)

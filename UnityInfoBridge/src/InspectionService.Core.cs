@@ -1,6 +1,8 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using Newtonsoft.Json.Linq;
@@ -403,13 +405,13 @@ namespace UnityInfoBridge
             bool overwrite = ArgBool(args, "overwrite", true);
             string outputPathArg = ArgString(args, "output_path", null);
 
-            string baseDir = Path.Combine(Path.Combine(Application.persistentDataPath, "UnityInfoBridge"), "captures");
+            string baseDir = ResolveCaptureBaseDirectory();
             Directory.CreateDirectory(baseDir);
 
             string outputPath = outputPathArg;
             if (string.IsNullOrEmpty(outputPath))
             {
-                string fileName = "capture_" + DateTime.Now.ToString("yyyyMMdd_HHmmss_fff") + ".png";
+                string fileName = "capture_" + DateTime.Now.ToString("yy-MM-dd-HH-mm-ss-fff", CultureInfo.InvariantCulture) + ".png";
                 outputPath = Path.Combine(baseDir, fileName);
             }
             else
@@ -445,7 +447,7 @@ namespace UnityInfoBridge
                 fallbackReason = immediateError != null ? immediateError.Message : "immediate_capture_unavailable";
                 try
                 {
-                    Application.CaptureScreenshot(outputPath, superSize);
+                    QueueScreenshotToFile(outputPath, superSize);
                 }
                 catch (Exception ex)
                 {
@@ -461,6 +463,7 @@ namespace UnityInfoBridge
             return new Dictionary<string, object>
             {
                 { "output_path", outputPath },
+                { "capture_base_dir", baseDir },
                 { "bytes_written", bytes },
                 { "super_size", superSize },
                 { "frame", Time.frameCount },
@@ -469,6 +472,36 @@ namespace UnityInfoBridge
                 { "file_ready", fileReady },
                 { "fallback_reason", fallbackReason }
             };
+        }
+
+        private static string ResolveCaptureBaseDirectory()
+        {
+            try
+            {
+                string dataPath = Application.dataPath;
+                if (!string.IsNullOrEmpty(dataPath))
+                {
+                    string fullDataPath = Path.GetFullPath(dataPath);
+                    DirectoryInfo dataDir = new DirectoryInfo(fullDataPath);
+                    if (dataDir.Parent != null)
+                    {
+                        return Path.Combine(Path.Combine(dataDir.Parent.FullName, "UnityInfoBridge"), "captures");
+                    }
+                }
+            }
+            catch { }
+
+            try
+            {
+                string currentDirectory = Environment.CurrentDirectory;
+                if (!string.IsNullOrEmpty(currentDirectory))
+                {
+                    return Path.Combine(Path.Combine(Path.GetFullPath(currentDirectory), "UnityInfoBridge"), "captures");
+                }
+            }
+            catch { }
+
+            return Path.Combine(Path.Combine(Application.persistentDataPath, "UnityInfoBridge"), "captures");
         }
 
         private static bool TryWriteScreenshotPngNow(string outputPath, int superSize, out long bytesWritten, out Exception error)
@@ -534,7 +567,8 @@ namespace UnityInfoBridge
                 if (instance != null)
                 {
                     object png = instance.Invoke(texture, null);
-                    if (png is byte[] bytes && bytes.Length > 0) return bytes;
+                    byte[] bytes = TryCoerceByteArray(png);
+                    if (bytes != null && bytes.Length > 0) return bytes;
                 }
             }
             catch { }
@@ -550,13 +584,141 @@ namespace UnityInfoBridge
                     if (staticEncode != null)
                     {
                         object png = staticEncode.Invoke(null, new object[] { texture });
-                        if (png is byte[] bytes && bytes.Length > 0) return bytes;
+                        byte[] bytes = TryCoerceByteArray(png);
+                        if (bytes != null && bytes.Length > 0) return bytes;
                     }
                 }
             }
             catch { }
 
             return null;
+        }
+
+        private static byte[] TryCoerceByteArray(object value)
+        {
+            if (value == null) return null;
+
+            byte[] direct = value as byte[];
+            if (direct != null && direct.Length > 0) return direct;
+
+            Array array = value as Array;
+            if (array != null)
+            {
+                byte[] copied = CopyByteArray(array.Length, delegate(int index) { return array.GetValue(index); });
+                if (copied != null && copied.Length > 0) return copied;
+            }
+
+            try
+            {
+                IEnumerable enumerable = value as IEnumerable;
+                if (enumerable != null && !(value is string))
+                {
+                    List<byte> bytes = new List<byte>();
+                    foreach (object item in enumerable)
+                    {
+                        byte parsed;
+                        if (!TryConvertToByte(item, out parsed)) return null;
+                        bytes.Add(parsed);
+                    }
+
+                    if (bytes.Count > 0) return bytes.ToArray();
+                }
+            }
+            catch { }
+
+            try
+            {
+                Type valueType = value.GetType();
+                PropertyInfo lengthProp = valueType.GetProperty("Length", BindingFlags.Public | BindingFlags.Instance)
+                    ?? valueType.GetProperty("Count", BindingFlags.Public | BindingFlags.Instance);
+                PropertyInfo indexer = valueType.GetProperty("Item", BindingFlags.Public | BindingFlags.Instance, null, null, new[] { typeof(int) }, null);
+                if (lengthProp != null && indexer != null)
+                {
+                    object rawLength = lengthProp.GetValue(value, null);
+                    int length = rawLength == null ? 0 : Convert.ToInt32(rawLength, CultureInfo.InvariantCulture);
+                    byte[] copied = CopyByteArray(length, delegate(int index) { return indexer.GetValue(value, new object[] { index }); });
+                    if (copied != null && copied.Length > 0) return copied;
+                }
+            }
+            catch { }
+
+            try
+            {
+                MethodInfo toArray = value.GetType().GetMethod("ToArray", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
+                if (toArray != null)
+                {
+                    object arrayValue = toArray.Invoke(value, null);
+                    if (!ReferenceEquals(arrayValue, value))
+                    {
+                        byte[] copied = TryCoerceByteArray(arrayValue);
+                        if (copied != null && copied.Length > 0) return copied;
+                    }
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
+        private static byte[] CopyByteArray(int length, Func<int, object> getter)
+        {
+            if (length <= 0 || getter == null) return null;
+
+            byte[] output = new byte[length];
+            for (int i = 0; i < length; i++)
+            {
+                byte parsed;
+                if (!TryConvertToByte(getter(i), out parsed)) return null;
+                output[i] = parsed;
+            }
+            return output;
+        }
+
+        private static bool TryConvertToByte(object value, out byte output)
+        {
+            output = 0;
+            if (value == null) return false;
+
+            if (value is byte) { output = (byte)value; return true; }
+            if (value is sbyte) { output = unchecked((byte)(sbyte)value); return true; }
+
+            try
+            {
+                output = Convert.ToByte(value, CultureInfo.InvariantCulture);
+                return true;
+            }
+            catch { }
+
+            try
+            {
+                output = byte.Parse(value.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture);
+                return true;
+            }
+            catch { }
+
+            return false;
+        }
+
+        private static void QueueScreenshotToFile(string outputPath, int superSize)
+        {
+            MethodInfo captureToFile = ResolveCaptureScreenshotToFileMethod();
+            if (captureToFile != null)
+            {
+                ParameterInfo[] parameters = captureToFile.GetParameters();
+                if (parameters.Length == 1)
+                {
+                    captureToFile.Invoke(null, new object[] { outputPath });
+                    return;
+                }
+
+                if (parameters.Length >= 2)
+                {
+                    captureToFile.Invoke(null, new object[] { outputPath, superSize });
+                    return;
+                }
+            }
+
+            Application.CaptureScreenshot(outputPath, superSize);
         }
 
         private static MethodInfo ResolveCaptureScreenshotAsTextureMethod()
@@ -569,6 +731,19 @@ namespace UnityInfoBridge
             if (withSuperSize != null) return withSuperSize;
 
             MethodInfo noArg = screenCaptureType.GetMethod("CaptureScreenshotAsTexture", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+            return noArg;
+        }
+
+        private static MethodInfo ResolveCaptureScreenshotToFileMethod()
+        {
+            Type screenCaptureType = Type.GetType("UnityEngine.ScreenCapture, UnityEngine.CoreModule");
+            if (screenCaptureType == null) screenCaptureType = Type.GetType("UnityEngine.ScreenCapture, UnityEngine");
+            if (screenCaptureType == null) return null;
+
+            MethodInfo withSuperSize = screenCaptureType.GetMethod("CaptureScreenshot", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string), typeof(int) }, null);
+            if (withSuperSize != null) return withSuperSize;
+
+            MethodInfo noArg = screenCaptureType.GetMethod("CaptureScreenshot", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(string) }, null);
             return noArg;
         }
     }

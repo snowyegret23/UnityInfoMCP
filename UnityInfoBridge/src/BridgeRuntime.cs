@@ -368,6 +368,8 @@ namespace UnityInfoBridge
     {
         private const int DefaultDispatchTimeoutMs = 15000;
         private const int HeavyDispatchTimeoutMs = 60000;
+        private static bool _disableJsonConvertSerialization;
+        private static bool _jsonConvertDisableLogged;
 
         public static string Handle(string line)
         {
@@ -435,7 +437,7 @@ namespace UnityInfoBridge
                 { "id", id },
                 { "result", result }
             };
-            return JsonWire.Serialize(payload);
+            return SerializePayload(payload);
         }
 
         private static string BuildError(string id, int code, string message, object data)
@@ -453,7 +455,35 @@ namespace UnityInfoBridge
                 { "id", id },
                 { "error", error }
             };
-            return JsonWire.Serialize(payload);
+            return SerializePayload(payload);
+        }
+
+        private static string SerializePayload(object payload)
+        {
+            if (_disableJsonConvertSerialization)
+            {
+                return JsonWire.Serialize(payload);
+            }
+
+            try
+            {
+                return JsonConvert.SerializeObject(payload, Formatting.None, new JsonSerializerSettings
+                {
+                    Culture = CultureInfo.InvariantCulture,
+                    NullValueHandling = NullValueHandling.Include,
+                    ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+                });
+            }
+            catch (Exception ex)
+            {
+                _disableJsonConvertSerialization = true;
+                if (!_jsonConvertDisableLogged)
+                {
+                    _jsonConvertDisableLogged = true;
+                    BridgeLog.Warn("JsonConvert serialization disabled for this session; using JsonWire fallback: " + ex.Message);
+                }
+                return JsonWire.Serialize(payload);
+            }
         }
     }
 

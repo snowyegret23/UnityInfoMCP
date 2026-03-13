@@ -88,6 +88,7 @@ namespace UnityInfoBridge
         private static List<GameObject> CollectGameObjects(string sceneName, bool includeInactive)
         {
             List<GameObject> output = new List<GameObject>();
+            HashSet<int> seen = new HashSet<int>();
             for (int i = 0; i < SceneManager.sceneCount; i++)
             {
                 Scene scene = SceneManager.GetSceneAt(i);
@@ -97,21 +98,35 @@ namespace UnityInfoBridge
                 GameObject[] roots = scene.GetRootGameObjects();
                 for (int r = 0; r < roots.Length; r++)
                 {
-                    WalkHierarchy(roots[r], includeInactive, output);
+                    WalkHierarchy(roots[r], includeInactive, output, seen);
                 }
             }
+
+            GameObject[] allObjects = Resources.FindObjectsOfTypeAll<GameObject>();
+            for (int i = 0; i < allObjects.Length; i++)
+            {
+                GameObject go = allObjects[i];
+                if (go == null) continue;
+                if (!go.scene.IsValid()) continue;
+                if (!string.IsNullOrEmpty(sceneName) && !string.Equals(go.scene.name, sceneName, StringComparison.Ordinal)) continue;
+                if (go.transform.parent != null) continue;
+
+                WalkHierarchy(go, includeInactive, output, seen);
+            }
+
             return output;
         }
 
-        private static void WalkHierarchy(GameObject go, bool includeInactive, List<GameObject> output)
+        private static void WalkHierarchy(GameObject go, bool includeInactive, List<GameObject> output, HashSet<int> seen)
         {
             if (go == null) return;
+            if (!seen.Add(go.GetInstanceID())) return;
             if (includeInactive || go.activeInHierarchy) output.Add(go);
 
             for (int i = 0; i < go.transform.childCount; i++)
             {
                 Transform child = go.transform.GetChild(i);
-                if (child != null) WalkHierarchy(child.gameObject, includeInactive, output);
+                if (child != null) WalkHierarchy(child.gameObject, includeInactive, output, seen);
             }
         }
 
@@ -1261,20 +1276,64 @@ namespace UnityInfoBridge
             return token.Value<float>();
         }
 
+        private static float[] ReadFloatSequenceFromString(string raw)
+        {
+            if (raw == null || raw.Trim().Length == 0) return new float[0];
+
+            MatchCollection matches = Regex.Matches(
+                raw,
+                @"[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?",
+                RegexOptions.CultureInvariant);
+
+            if (matches.Count == 0) return new float[0];
+
+            List<float> values = new List<float>(matches.Count);
+            for (int i = 0; i < matches.Count; i++)
+            {
+                float parsed;
+                if (!float.TryParse(matches[i].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+                {
+                    return new float[0];
+                }
+
+                values.Add(parsed);
+            }
+
+            return values.ToArray();
+        }
+
         private static Vector2 ParseVector2(JToken token)
         {
+            if (token != null && token.Type == JTokenType.String)
+            {
+                float[] values = ReadFloatSequenceFromString(token.Value<string>());
+                if (values.Length >= 2) return new Vector2(values[0], values[1]);
+            }
+
             if (token is JArray arr) return new Vector2(ReadArrayFloat(arr, 0, 0f), ReadArrayFloat(arr, 1, 0f));
             return new Vector2(ReadFloatToken(token, "x", 0f), ReadFloatToken(token, "y", 0f));
         }
 
         private static Vector3 ParseVector3(JToken token)
         {
+            if (token != null && token.Type == JTokenType.String)
+            {
+                float[] values = ReadFloatSequenceFromString(token.Value<string>());
+                if (values.Length >= 3) return new Vector3(values[0], values[1], values[2]);
+            }
+
             if (token is JArray arr) return new Vector3(ReadArrayFloat(arr, 0, 0f), ReadArrayFloat(arr, 1, 0f), ReadArrayFloat(arr, 2, 0f));
             return new Vector3(ReadFloatToken(token, "x", 0f), ReadFloatToken(token, "y", 0f), ReadFloatToken(token, "z", 0f));
         }
 
         private static Vector4 ParseVector4(JToken token)
         {
+            if (token != null && token.Type == JTokenType.String)
+            {
+                float[] values = ReadFloatSequenceFromString(token.Value<string>());
+                if (values.Length >= 4) return new Vector4(values[0], values[1], values[2], values[3]);
+            }
+
             if (token is JArray arr) return new Vector4(ReadArrayFloat(arr, 0, 0f), ReadArrayFloat(arr, 1, 0f), ReadArrayFloat(arr, 2, 0f), ReadArrayFloat(arr, 3, 0f));
             return new Vector4(
                 ReadFloatToken(token, "x", 0f),
@@ -1285,6 +1344,13 @@ namespace UnityInfoBridge
 
         private static Quaternion ParseQuaternion(JToken token)
         {
+            if (token != null && token.Type == JTokenType.String)
+            {
+                float[] values = ReadFloatSequenceFromString(token.Value<string>());
+                if (values.Length >= 4) return new Quaternion(values[0], values[1], values[2], values[3]);
+                if (values.Length == 3) return Quaternion.Euler(values[0], values[1], values[2]);
+            }
+
             if (token["euler"] is JObject)
             {
                 Vector3 euler = ParseVector3(token["euler"]);
@@ -1321,6 +1387,10 @@ namespace UnityInfoBridge
                 string raw = token.Value<string>();
                 Color parsed;
                 if (ColorUtility.TryParseHtmlString(raw, out parsed)) return parsed;
+
+                float[] values = ReadFloatSequenceFromString(raw);
+                if (values.Length >= 4) return new Color(values[0], values[1], values[2], values[3]);
+                if (values.Length == 3) return new Color(values[0], values[1], values[2], 1f);
             }
 
             return new Color(

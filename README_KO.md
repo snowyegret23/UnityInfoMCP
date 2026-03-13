@@ -16,13 +16,14 @@ MCP 기반 자동화를 위한 Unity 런타임 조사 툴킷입니다.
 ## 포트 구성
 
 실사용에서 가장 중요한 부분입니다.
-- MCP 서버: 기본값 `127.0.0.1:16000`
+- MCP 서버: 기본값 `http://127.0.0.1:16000/mcp`
 - 게임 브리지: `127.0.0.1:16001~16100` 범위에서 첫 번째 사용 가능한 포트
 
 이 둘은 서로 다른 엔드포인트입니다.
 - `--port`는 MCP 서버 포트를 바꿉니다.
 - `UNITY_INFO_BRIDGE_PORT`는 브리지 연결 시도용 레거시 fallback 값입니다.
 - 브리지 자동 탐색은 여전히 `16001~16100`을 스캔합니다.
+- `16000`은 `UnityInfoMCP` HTTP 서버 포트입니다. 게임 내부의 `UnityInfoBridge` 플러그인 자체는 `16001~16100` 중 첫 번째 사용 가능한 포트에 바인드됩니다.
 
 전송 계층도 두 종류가 따로 있습니다.
 - 클라이언트 -> `UnityInfoMCP`: Streamable HTTP
@@ -91,48 +92,67 @@ unity-info-mcp --port 8080
 동작 방식:
 - MCP transport: Streamable HTTP
 - 기본 바인드: `127.0.0.1:16000`
+- 기본 MCP 엔드포인트: `http://127.0.0.1:16000/mcp`
 - 시작 실패 시: 오류를 출력하고 `Enter` 입력을 기다린 뒤 종료
 
 ## MCP 클라이언트 설정 예시
 
-`unity-info-mcp`가 `PATH`에 잡혀 있다면 이 방식이 가장 간단합니다.
+`UnityInfoMCP`는 stdio MCP 서버가 아니라 HTTP MCP 서버입니다.
 
-```toml
-[mcp_servers.UnityInfoMCP]
-command = "unity-info-mcp"
-args = []
-startup_timeout_sec = 45
+즉 MCP 클라이언트는 다음과 같은 URL에 연결해야 합니다.
 
-[mcp_servers.UnityInfoMCP.env]
-UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
-UNITY_INFO_BRIDGE_PORT = "16000"
+```text
+http://127.0.0.1:16000/mcp
 ```
 
-모듈을 직접 실행하고 싶다면:
+서버를 다른 포트로 실행했다면 그 포트에 맞는 엔드포인트를 사용하면 됩니다.
 
-```toml
-[mcp_servers.UnityInfoMCP]
-command = "python"
-args = ["-m", "UnityInfoMCP"]
-startup_timeout_sec = 45
-
-[mcp_servers.UnityInfoMCP.env]
-UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
-UNITY_INFO_BRIDGE_PORT = "16000"
+```text
+http://127.0.0.1:8080/mcp
 ```
 
-`unity-info-mcp`나 `python`이 `PATH`에 안정적으로 없으면, 그때만 명시적 인터프리터 경로를 사용하면 됩니다.
+서버 프로세스를 띄울 때는 브리지 쪽 환경 변수를 같이 줄 수 있습니다.
 
-```toml
-[mcp_servers.UnityInfoMCP]
-command = 'C:\path\to\.venv\Scripts\python.exe'
-args = ["-m", "UnityInfoMCP"]
-startup_timeout_sec = 45
-
-[mcp_servers.UnityInfoMCP.env]
-UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
-UNITY_INFO_BRIDGE_PORT = "16000"
+```powershell
+$env:UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+$env:UNITY_INFO_BRIDGE_PORT = "16000"
+unity-info-mcp
 ```
+
+중요한 점:
+- `UNITY_INFO_BRIDGE_PORT=16000`은 레거시 fallback 브리지 포트일 뿐입니다.
+- 일반적인 브리지 자동 탐색은 여전히 `16001~16100`을 먼저 스캔합니다.
+- MCP 클라이언트가 프로세스를 대신 실행해 주더라도, 그 프로세스는 stdio가 아니라 HTTP 서버를 띄웁니다.
+
+## 직접 실행
+
+MCP 클라이언트 설정과 별개로 `UnityInfoMCP` 자체를 직접 실행할 수도 있습니다.
+
+`unity-info-mcp`가 `PATH`에 있을 때:
+
+```bash
+unity-info-mcp
+```
+
+모듈을 직접 실행할 때:
+
+```bash
+python -m UnityInfoMCP
+```
+
+다른 포트로 띄울 때:
+
+```bash
+unity-info-mcp --port 8080
+```
+
+PyInstaller로 만든 실행 파일이 있다면 그것도 직접 실행할 수 있습니다.
+
+```powershell
+& "C:\path\to\UnityInfoMCP_v1.0.1.exe"
+```
+
+이 직접 실행 방식들은 모두 `UnityInfoMCP`의 Streamable HTTP 서버를 시작하고, 선택된 포트의 `/mcp`를 노출합니다.
 
 ## 환경 변수
 
@@ -143,7 +163,7 @@ UNITY_INFO_BRIDGE_PORT = "16000"
   기본값: `127.0.0.1`
 - `UNITY_INFO_BRIDGE_PORT`
   기본값: `16000`
-  브리지 연결용 레거시 fallback 포트
+  브리지 연결용 레거시 fallback 포트입니다. 자동 탐색은 여전히 `16001~16100`을 스캔합니다.
 - `UNITY_INFO_BRIDGE_TIMEOUT_SEC`
   기본값: `8.0`
 - `UNITY_INFO_MCP_NAME`
@@ -188,18 +208,36 @@ Set-Location UnityInfoBridge
 - `UnityInfoBridge/Release/UnityInfoBridge.MelonLoader.Mono/`
 - `UnityInfoBridge/Release/UnityInfoBridge.MelonLoader.IL2CPP/`
 
+각 출력 폴더에는 브리지 DLL과 함께 `Newtonsoft.Json.dll`이 포함됩니다.
+IL2CPP 출력에는 `UnityInfoBridge.*.deps.json`도 같이 들어갑니다.
+
 ## 릴리즈 산출물
 
 GitHub 릴리즈 워크플로우는 다음 파일을 생성합니다.
 - `UnityInfoMCP_vx.x.x.exe`
+- `UnityInfoMCP-vx.x.x.tar.gz`
+- `UnityInfoMCP-vx.x.x-py3-none-any.whl`
 - `UnityInfoBridge_vx.x.x_MelonLoader_Mono.zip`
 - `UnityInfoBridge_vx.x.x_MelonLoader_IL2CPP.zip`
 - `UnityInfoBridge_vx.x.x_BepInEx_Mono.zip`
 - `UnityInfoBridge_vx.x.x_BepInEx_IL2CPP.zip`
+- `SHA256SUMS.txt`
 
 압축 내부 구조:
-- MelonLoader zip: `Mods/UnityInfoBridge.dll`
-- BepInEx zip: `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`
+- MelonLoader Mono zip:
+  `Mods/UnityInfoBridge.dll`
+  `Mods/Newtonsoft.Json.dll`
+- MelonLoader IL2CPP zip:
+  `Mods/UnityInfoBridge.dll`
+  `Mods/Newtonsoft.Json.dll`
+  `Mods/UnityInfoBridge.deps.json`
+- BepInEx Mono zip:
+  `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`
+  `BepInEx/plugins/UnityInfoBridge/Newtonsoft.Json.dll`
+- BepInEx IL2CPP zip:
+  `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`
+  `BepInEx/plugins/UnityInfoBridge/Newtonsoft.Json.dll`
+  `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.deps.json`
 
 ## MCP 도구 구성
 
@@ -232,6 +270,20 @@ GitHub 릴리즈 워크플로우는 다음 파일을 생성합니다.
 스냅샷:
 - `snapshot_gameobject`
 - `snapshot_scene`
+
+쓰기 작업:
+- `set_gameobject_active`
+- `set_component_member`
+- `set_text`
+
+캡처:
+- `capture_screenshot`
+
+참고:
+- 텍스트와 계층 탐색은 Unity가 유효한 런타임 씬 오브젝트로 노출하는 `DontDestroyOnLoad` UI도 포함합니다.
+- `capture_screenshot`는 PNG 이미지 내용을 MCP 클라이언트로 바로 반환합니다.
+- `output_path`를 생략하면 브리지는 `GameRoot\UnityInfoBridge\captures\capture_yy-MM-dd-HH-mm-ss-fff.png` 경로를 임시로 사용하고, `UnityInfoMCP`가 이미지를 읽은 뒤 임시 파일을 삭제합니다.
+- MCP 응답 뒤에도 PNG를 남겨두고 싶다면 `output_path`를 명시하세요.
 
 ## 사용 예시
 
@@ -282,7 +334,7 @@ UnityInfoMCP.get_components({
 UnityInfoMCP.set_component_member({
   "component_instance_id": 485632,
   "member_name": "anchoredPosition",
-  "value": "{\"x\":0.0,\"y\":-258.0}",
+  "value": { "x": 0.0, "y": -258.0 },
   "include_non_public": false
 })
 ```
@@ -304,6 +356,7 @@ UnityInfoMCP.get_component_fields({
 - 실제 변경: 위로 `100px` 이동
 
 `480506`, `485632` 같은 런타임 오브젝트 ID는 예시이며 세션마다 달라질 수 있습니다.
+일반적인 Unity 구조체 값은 `"(0, -258)"` 같은 튜플 문자열 형태로도 전달할 수 있습니다.
 
 ## 문서
 

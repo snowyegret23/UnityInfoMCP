@@ -16,13 +16,14 @@ The split is intentional:
 ## Port layout
 
 This is the part that matters most in practice:
-- MCP server: `127.0.0.1:16000` by default
+- MCP server: `http://127.0.0.1:16000/mcp` by default
 - Game bridge: first free port in `127.0.0.1:16001~16100`
 
 These are different endpoints.
 - `--port` changes the MCP server port
 - `UNITY_INFO_BRIDGE_PORT` is only a legacy fallback for bridge connection attempts
 - bridge auto-discovery still scans `16001~16100`
+- `16000` is the `UnityInfoMCP` HTTP port. The in-game `UnityInfoBridge` plugin itself binds the first free port in `16001~16100`.
 
 There are also two separate transport layers:
 - Client -> `UnityInfoMCP`: Streamable HTTP
@@ -91,48 +92,67 @@ unity-info-mcp --port 8080
 Behavior:
 - MCP transport: Streamable HTTP
 - default bind: `127.0.0.1:16000`
+- default MCP endpoint: `http://127.0.0.1:16000/mcp`
 - startup failure: prints the error and waits for `Enter` before exiting
 
 ## MCP client configuration
 
-Recommended when `unity-info-mcp` is available on `PATH`:
+`UnityInfoMCP` is an HTTP MCP server, not a stdio MCP server.
 
-```toml
-[mcp_servers.UnityInfoMCP]
-command = "unity-info-mcp"
-args = []
-startup_timeout_sec = 45
+That means the client should connect to a URL such as:
 
-[mcp_servers.UnityInfoMCP.env]
-UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
-UNITY_INFO_BRIDGE_PORT = "16000"
+```text
+http://127.0.0.1:16000/mcp
 ```
 
-If you prefer to invoke the module directly:
+If you launch the server on a custom port, use the matching endpoint instead:
 
-```toml
-[mcp_servers.UnityInfoMCP]
-command = "python"
-args = ["-m", "UnityInfoMCP"]
-startup_timeout_sec = 45
-
-[mcp_servers.UnityInfoMCP.env]
-UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
-UNITY_INFO_BRIDGE_PORT = "16000"
+```text
+http://127.0.0.1:8080/mcp
 ```
 
-If neither `unity-info-mcp` nor `python` is reliably on `PATH`, use an explicit interpreter path:
+Bridge-side environment variables are still useful when launching the server process:
 
-```toml
-[mcp_servers.UnityInfoMCP]
-command = 'C:\path\to\.venv\Scripts\python.exe'
-args = ["-m", "UnityInfoMCP"]
-startup_timeout_sec = 45
-
-[mcp_servers.UnityInfoMCP.env]
-UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
-UNITY_INFO_BRIDGE_PORT = "16000"
+```powershell
+$env:UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+$env:UNITY_INFO_BRIDGE_PORT = "16000"
+unity-info-mcp
 ```
+
+Important notes:
+- `UNITY_INFO_BRIDGE_PORT=16000` is only a legacy fallback bridge port
+- normal bridge discovery still probes `16001~16100`
+- if your MCP client can launch a process for you, that process still starts an HTTP server; it does not switch to stdio transport automatically
+
+## Direct execution
+
+You can also run `UnityInfoMCP` directly outside MCP client configuration.
+
+When `unity-info-mcp` is available on `PATH`:
+
+```bash
+unity-info-mcp
+```
+
+When you prefer to invoke the module directly:
+
+```bash
+python -m UnityInfoMCP
+```
+
+To bind on a different port:
+
+```bash
+unity-info-mcp --port 8080
+```
+
+If you built the PyInstaller executable, you can launch it directly as well:
+
+```powershell
+& "C:\path\to\UnityInfoMCP_v1.0.1.exe"
+```
+
+In all of these direct-launch cases, `UnityInfoMCP` starts its Streamable HTTP server and exposes `/mcp` on the selected port.
 
 ## Environment variables
 
@@ -143,7 +163,7 @@ UNITY_INFO_BRIDGE_PORT = "16000"
   Default: `127.0.0.1`
 - `UNITY_INFO_BRIDGE_PORT`
   Default: `16000`
-  Legacy fallback bridge port only
+  Legacy fallback bridge port only. Auto-discovery still probes `16001~16100`.
 - `UNITY_INFO_BRIDGE_TIMEOUT_SEC`
   Default: `8.0`
 - `UNITY_INFO_MCP_NAME`
@@ -188,18 +208,36 @@ Build outputs:
 - `UnityInfoBridge/Release/UnityInfoBridge.MelonLoader.Mono/`
 - `UnityInfoBridge/Release/UnityInfoBridge.MelonLoader.IL2CPP/`
 
+Each output now includes the bridge assembly plus `Newtonsoft.Json.dll`.
+IL2CPP outputs also include `UnityInfoBridge.*.deps.json`.
+
 ## Release assets
 
 The GitHub release workflow produces:
 - `UnityInfoMCP_vx.x.x.exe`
+- `UnityInfoMCP-vx.x.x.tar.gz`
+- `UnityInfoMCP-vx.x.x-py3-none-any.whl`
 - `UnityInfoBridge_vx.x.x_MelonLoader_Mono.zip`
 - `UnityInfoBridge_vx.x.x_MelonLoader_IL2CPP.zip`
 - `UnityInfoBridge_vx.x.x_BepInEx_Mono.zip`
 - `UnityInfoBridge_vx.x.x_BepInEx_IL2CPP.zip`
+- `SHA256SUMS.txt`
 
 Package structure:
-- MelonLoader zip: `Mods/UnityInfoBridge.dll`
-- BepInEx zip: `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`
+- MelonLoader Mono zip:
+  `Mods/UnityInfoBridge.dll`
+  `Mods/Newtonsoft.Json.dll`
+- MelonLoader IL2CPP zip:
+  `Mods/UnityInfoBridge.dll`
+  `Mods/Newtonsoft.Json.dll`
+  `Mods/UnityInfoBridge.deps.json`
+- BepInEx Mono zip:
+  `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`
+  `BepInEx/plugins/UnityInfoBridge/Newtonsoft.Json.dll`
+- BepInEx IL2CPP zip:
+  `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`
+  `BepInEx/plugins/UnityInfoBridge/Newtonsoft.Json.dll`
+  `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.deps.json`
 
 ## MCP tool surface
 
@@ -232,6 +270,20 @@ Text and localization discovery:
 Snapshots:
 - `snapshot_gameobject`
 - `snapshot_scene`
+
+Write operations:
+- `set_gameobject_active`
+- `set_component_member`
+- `set_text`
+
+Capture:
+- `capture_screenshot`
+
+Notes:
+- text and hierarchy discovery includes persistent `DontDestroyOnLoad` UI when Unity exposes it as a valid runtime scene object
+- `capture_screenshot` returns PNG image content to the MCP client
+- when `output_path` is omitted, the bridge uses `GameRoot\UnityInfoBridge\captures\capture_yy-MM-dd-HH-mm-ss-fff.png` as a temporary capture path and `UnityInfoMCP` removes the temp file after embedding the image
+- provide `output_path` if you want the PNG to remain on disk after the MCP response
 
 ## Example workflow
 
@@ -282,7 +334,7 @@ UnityInfoMCP.get_components({
 UnityInfoMCP.set_component_member({
   "component_instance_id": 485632,
   "member_name": "anchoredPosition",
-  "value": "{\"x\":0.0,\"y\":-258.0}",
+  "value": { "x": 0.0, "y": -258.0 },
   "include_non_public": false
 })
 ```
@@ -304,6 +356,7 @@ Typical result summary:
 - effective change: moved upward by `100px`
 
 Runtime object IDs such as `480506` and `485632` are example values and will differ each session.
+For common Unity structs, tuple-style strings such as `"(0, -258)"` also work.
 
 ## Documentation
 
