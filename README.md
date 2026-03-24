@@ -16,17 +16,20 @@ The split is intentional:
 ## Port layout
 
 This is the part that matters most in practice:
-- MCP server: `http://127.0.0.1:16000/mcp` by default
+- MCP server in default HTTP mode: `http://127.0.0.1:16000/mcp`
+- MCP server in stdio mode: no listening socket; the MCP client launches the process directly
 - Game bridge: first free port in `127.0.0.1:16001~16100`
 
-These are different endpoints.
-- `--port` changes the MCP server port
+These are different connections.
+- `--transport streamable-http` uses the HTTP endpoint above
+- `--transport stdio` switches the client-facing transport to stdio
+- `--port` only applies to `--transport streamable-http`
 - `UNITY_INFO_BRIDGE_PORT` is only a legacy fallback for bridge connection attempts
 - bridge auto-discovery still scans `16001~16100`
 - `16000` is the `UnityInfoMCP` HTTP port. The in-game `UnityInfoBridge` plugin itself binds the first free port in `16001~16100`.
 
 There are also two separate transport layers:
-- Client -> `UnityInfoMCP`: Streamable HTTP
+- Client -> `UnityInfoMCP`: Streamable HTTP or stdio
 - `UnityInfoMCP` -> `UnityInfoBridge`: TCP
 
 ## Repository layout
@@ -64,11 +67,13 @@ For PyInstaller or release builds, install the build extra instead:
 pip install -e ".[build]"
 ```
 
-Run the MCP server on the default HTTP port:
+Run the MCP server on the default transport and port:
 
 ```bash
 unity-info-mcp
 ```
+
+That starts the Streamable HTTP transport on `127.0.0.1:16000` and exposes `/mcp`.
 
 If the `unity-info-mcp` command is not found on Windows, use:
 
@@ -89,17 +94,25 @@ Run it on a different port:
 unity-info-mcp --port 8080
 ```
 
+Run it over stdio instead:
+
+```bash
+unity-info-mcp --transport stdio
+```
+
 Behavior:
-- MCP transport: Streamable HTTP
-- default bind: `127.0.0.1:16000`
-- default MCP endpoint: `http://127.0.0.1:16000/mcp`
-- startup failure: prints the error and waits for `Enter` before exiting
+- default MCP transport: Streamable HTTP
+- optional MCP transport: stdio via `--transport stdio`
+- default HTTP bind: `127.0.0.1:16000`
+- default HTTP MCP endpoint: `http://127.0.0.1:16000/mcp`
+- `--port` is only valid when `--transport streamable-http` is in use
+- startup failure: prints the error; interactive HTTP launches wait for `Enter`, stdio exits immediately
 
 ## MCP client configuration
 
-`UnityInfoMCP` is an HTTP MCP server, not a stdio MCP server.
+`UnityInfoMCP` supports both Streamable HTTP and stdio on the client-facing side.
 
-That means the client should connect to a URL such as:
+For URL-based MCP clients, connect to:
 
 ```text
 http://127.0.0.1:16000/mcp
@@ -111,18 +124,57 @@ If you launch the server on a custom port, use the matching endpoint instead:
 http://127.0.0.1:8080/mcp
 ```
 
-Bridge-side environment variables are still useful when launching the server process:
+For process-launching MCP clients, launch the server in stdio mode:
+
+```text
+unity-info-mcp --transport stdio
+```
+
+Bridge-side environment variables are still useful in both modes:
 
 ```powershell
 $env:UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
 $env:UNITY_INFO_BRIDGE_PORT = "16000"
-unity-info-mcp
+unity-info-mcp --transport stdio
 ```
 
 Important notes:
 - `UNITY_INFO_BRIDGE_PORT=16000` is only a legacy fallback bridge port
 - normal bridge discovery still probes `16001~16100`
-- if your MCP client can launch a process for you, that process still starts an HTTP server; it does not switch to stdio transport automatically
+- `--port` only affects `--transport streamable-http`
+- `--transport stdio` does not expose `/mcp`; the client must speak MCP over the launched process stdio
+
+Recommended auto-launch examples:
+
+Codex `config.toml`:
+
+```toml
+[mcp_servers.UnityInfoMCP]
+command = "C:\\MCP\\UnityInfoMCP_v1.0.2.exe"
+args = ["--transport", "stdio"]
+startup_timeout_sec = 45
+
+[mcp_servers.UnityInfoMCP.env]
+UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+UNITY_INFO_BRIDGE_PORT = "16000"
+```
+
+Claude Desktop `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "UnityInfoMCP": {
+      "command": "C:\\MCP\\UnityInfoMCP_v1.0.2.exe",
+      "args": ["--transport", "stdio"],
+      "env": {
+        "UNITY_INFO_BRIDGE_HOST": "127.0.0.1",
+        "UNITY_INFO_BRIDGE_PORT": "16000"
+      }
+    }
+  }
+}
+```
 
 ## Direct execution
 
@@ -134,13 +186,25 @@ When `unity-info-mcp` is available on `PATH`:
 unity-info-mcp
 ```
 
+When you prefer stdio transport:
+
+```bash
+unity-info-mcp --transport stdio
+```
+
 When you prefer to invoke the module directly:
 
 ```bash
 python -m UnityInfoMCP
 ```
 
-To bind on a different port:
+To run the module in stdio mode:
+
+```bash
+python -m UnityInfoMCP --transport stdio
+```
+
+To bind HTTP on a different port:
 
 ```bash
 unity-info-mcp --port 8080
@@ -149,10 +213,16 @@ unity-info-mcp --port 8080
 If you built the PyInstaller executable, you can launch it directly as well:
 
 ```powershell
-& "C:\path\to\UnityInfoMCP_v1.0.1.exe"
+& "C:\path\to\UnityInfoMCP_v1.0.2.exe"
 ```
 
-In all of these direct-launch cases, `UnityInfoMCP` starts its Streamable HTTP server and exposes `/mcp` on the selected port.
+Or in stdio mode:
+
+```powershell
+& "C:\path\to\UnityInfoMCP_v1.0.2.exe" --transport stdio
+```
+
+In all of these direct-launch cases, `UnityInfoMCP` starts the selected client-facing transport. Streamable HTTP exposes `/mcp` on the selected port, while stdio does not bind an HTTP port.
 
 ## Environment variables
 

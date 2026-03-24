@@ -4,6 +4,6 @@ namespace UnityInfoBridge
     {
         internal const string Guid = "com.unityinfomcp.bridge";
         internal const string Name = "UnityInfoBridge";
-        internal const string Version = "1.0.1";
+        internal const string Version = "1.0.2";
     }
 }
