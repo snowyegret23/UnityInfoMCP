@@ -50,7 +50,7 @@ UnityInfoMCP는 실행 중인 Unity 게임을 AI 클라이언트에서 조사하
 
 - Python 패키징은 `pyproject.toml`의 dynamic version metadata로 이 파일을 읽습니다.
 - `UnityInfoBridge`는 MSBuild 컴파일 중 이 파일에서 `PluginMetadata.Version`을 생성합니다.
-- GitHub 릴리즈 워크플로우도 같은 값을 읽어 산출물 이름, 태그, 릴리즈 이름에 사용합니다.
+- GitHub 릴리즈 워크플로우도 같은 값을 읽어 산출물 이름, 태그, 릴리즈 이름, PyPI 배포에 사용합니다.
 
 ## 설치와 실행
 
@@ -66,6 +66,12 @@ pip install -e .
 
 ```powershell
 pip install -e ".[build]"
+```
+
+PyPI에 릴리즈가 배포된 뒤에는 다음처럼 MCP 서버를 설치할 수 있습니다.
+
+```powershell
+pip install unity-info-mcp
 ```
 
 기본 Streamable HTTP transport로 MCP 서버 실행:
@@ -185,7 +191,7 @@ Set-Location UnityInfoBridge
 - `UnityInfoBridge_vx.x.x_BepInEx_IL2CPP.zip`
 - `SHA256SUMS.txt`
 
-릴리즈 버전은 `version.txt`에서 읽습니다. 릴리즈할 때는 이 파일만 한 번 수정한 뒤 릴리즈 워크플로우를 실행하면 됩니다.
+릴리즈 버전은 `version.txt`에서 읽습니다. 릴리즈할 때는 이 파일만 한 번 수정한 뒤 릴리즈 워크플로우를 실행하면 됩니다. 워크플로우는 Trusted Publishing으로 Python wheel과 sdist도 PyPI에 배포합니다.
 
 브리지 zip 내부 구조:
 

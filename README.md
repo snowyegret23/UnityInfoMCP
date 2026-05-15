@@ -50,7 +50,7 @@ The single source of truth for release/local build versioning is `version.txt` i
 
 - Python packaging reads it through `pyproject.toml` dynamic version metadata.
 - `UnityInfoBridge` generates `PluginMetadata.Version` from it during MSBuild compilation.
-- The GitHub release workflow reads it and uses the same value for artifact names, tags, and release names.
+- The GitHub release workflow reads it and uses the same value for artifact names, tags, release names, and PyPI publishing.
 
 ## Install And Run
 
@@ -66,6 +66,12 @@ For release packaging or PyInstaller builds:
 
 ```powershell
 pip install -e ".[build]"
+```
+
+After a release has been published to PyPI, install the MCP server with:
+
+```powershell
+pip install unity-info-mcp
 ```
 
 Run the MCP server with the default Streamable HTTP transport:
@@ -185,7 +191,7 @@ The release workflow produces:
 - `UnityInfoBridge_vx.x.x_BepInEx_IL2CPP.zip`
 - `SHA256SUMS.txt`
 
-Release versioning comes from `version.txt`. Update that file once, then run the release workflow.
+Release versioning comes from `version.txt`. Update that file once, then run the release workflow. The workflow also publishes the Python wheel and sdist to PyPI through Trusted Publishing.
 
 Bridge zip layout:
 
