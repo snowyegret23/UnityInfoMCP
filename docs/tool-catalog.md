@@ -2,6 +2,19 @@
 
 This file maps MCP tools to bridge methods and highlights why each tool is useful for game modding and localization analysis.
 
+## MCP discovery metadata
+
+Every public tool is registered with MCP-standard metadata so clients and models can distinguish inspection tools from state-changing tools:
+
+- `title`: short human-readable name for UI/tool pickers.
+- `description`: model-facing guidance that says when to use the tool.
+- `inputSchema.properties.*.description`: parameter-level guidance and safe ranges.
+- `annotations.readOnlyHint`: true for inspection/search/snapshot tools.
+- `annotations.destructiveHint`: true for live runtime mutation tools and screenshot capture with possible file overwrite.
+- `annotations.idempotentHint`: true only when repeated calls with the same arguments should have the same effect.
+- `annotations.openWorldHint`: false because the server only interacts with the selected local Unity bridge, not the web or arbitrary remote services.
+- `_meta.unityInfoMcp.category` and `_meta.unityInfoMcp.bridgeMethods`: implementation hints for clients that preserve MCP `_meta`.
+
 | MCP Tool | Bridge Method | Main Purpose |
 |---|---|---|
 | `bridge_status` | `ping`, `get_capabilities` | Check whether game bridge is reachable and what methods are implemented. |

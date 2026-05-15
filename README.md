@@ -2,155 +2,111 @@
 
 # UnityInfoMCP
 
-Unity runtime inspection toolkit for MCP-based automation.
+UnityInfoMCP is a local MCP toolkit for inspecting and lightly editing a running Unity game from an AI client.
 
-This repository contains two parts:
-- `UnityInfoMCP`: an external Python MCP server
-- `UnityInfoBridge`: an in-game Unity plugin that exposes runtime data over local JSON-RPC
+It is built for modding, localization, UI investigation, and runtime reverse engineering workflows where the AI needs structured Unity scene data instead of screenshots or log snippets alone.
 
-The split is intentional:
-- the MCP server can stay alive while games restart
-- AI clients keep a stable MCP endpoint
-- the game-side bridge can reconnect whenever the game launches again
+## Architecture
 
-## Port layout
+The project has two parts:
 
-This is the part that matters most in practice:
-- MCP server in default HTTP mode: `http://127.0.0.1:16000/mcp`
-- MCP server in stdio mode: no listening socket; the MCP client launches the process directly
-- Game bridge: first free port in `127.0.0.1:16001~16100`
+- `UnityInfoMCP`: a Python MCP server that the AI client connects to.
+- `UnityInfoBridge`: an in-game Unity plugin that exposes runtime data over local line-delimited JSON-RPC.
 
-These are different connections.
-- `--transport streamable-http` uses the HTTP endpoint above
-- `--transport stdio` switches the client-facing transport to stdio
-- `--port` only applies to `--transport streamable-http`
-- `UNITY_INFO_BRIDGE_PORT` is only a legacy fallback for bridge connection attempts
-- bridge auto-discovery still scans `16001~16100`
-- `16000` is the `UnityInfoMCP` HTTP port. The in-game `UnityInfoBridge` plugin itself binds the first free port in `16001~16100`.
+The split keeps the MCP endpoint stable while games restart. The MCP server can stay running, and the game-side bridge reconnects when the Unity process launches again.
 
-There are also two separate transport layers:
-- Client -> `UnityInfoMCP`: Streamable HTTP or stdio
-- `UnityInfoMCP` -> `UnityInfoBridge`: TCP
+## Ports And Transports
 
-## Repository layout
+There are two separate connections:
 
-- `UnityInfoMCP`
-  The Python MCP package
-- `UnityInfoBridge`
-  The Unity plugin project
-- `UnityInfoBridge/includes`
-  Reference DLLs used to build the bridge
-- `docs`
-  Bridge protocol and tool mapping documents
+| Connection | Default | Notes |
+|---|---:|---|
+| AI client -> `UnityInfoMCP` | `http://127.0.0.1:16000/mcp` | Streamable HTTP by default. Use `--transport stdio` for process-launched clients. |
+| `UnityInfoMCP` -> `UnityInfoBridge` | `127.0.0.1:16001~16100` | The bridge plugin binds the first free port in this range. |
 
-## Supported bridge targets
+Important details:
 
-`UnityInfoBridge` currently targets:
-- `BepInEx BE #754+` Mono
-- `BepInEx BE #754+` IL2CPP
-- `MelonLoader 0.7.2` Mono
-- `MelonLoader 0.7.2` IL2CPP
+- `--port` only changes the Streamable HTTP MCP server port.
+- `--transport stdio` does not open `/mcp`; the client speaks MCP over process stdio.
+- `UNITY_INFO_BRIDGE_PORT` is a legacy fixed-port fallback for old bridge setups.
+- Bridge discovery tries the configured fallback port when it is outside the auto range, then scans `16001~16100`.
+- Port `16000` is reserved for the MCP HTTP server in the default setup, not for the normal game bridge.
 
-## Running the MCP server
+## Requirements
 
-Create and activate a virtual environment:
+- Python 3.10+
+- `mcp>=1.27.0`
+- `pydantic>=2.0`
+- .NET SDK 8.0+ when building `UnityInfoBridge`
+- A supported Unity mod loader for the bridge plugin:
+  - BepInEx BE #754+ Mono
+  - BepInEx BE #754+ IL2CPP
+  - MelonLoader 0.7.2 Mono
+  - MelonLoader 0.7.2 IL2CPP
 
-```bash
+## Versioning
+
+The single source of truth for release/local build versioning is `version.txt` in the repository root.
+
+- Python packaging reads it through `pyproject.toml` dynamic version metadata.
+- `UnityInfoBridge` generates `PluginMetadata.Version` from it during MSBuild compilation.
+- The GitHub release workflow reads it and uses the same value for artifact names, tags, and release names.
+
+## Install And Run
+
+Create a virtual environment and install the Python MCP server:
+
+```powershell
 python -m venv .venv
-. .venv/Scripts/activate
+.\.venv\Scripts\Activate.ps1
 pip install -e .
 ```
 
-For PyInstaller or release builds, install the build extra instead:
+For release packaging or PyInstaller builds:
 
-```bash
+```powershell
 pip install -e ".[build]"
 ```
 
-Run the MCP server on the default transport and port:
+Run the MCP server with the default Streamable HTTP transport:
 
-```bash
+```powershell
 unity-info-mcp
 ```
 
-That starts the Streamable HTTP transport on `127.0.0.1:16000` and exposes `/mcp`.
+Equivalent module invocation:
 
-If the `unity-info-mcp` command is not found on Windows, use:
-
-```bash
+```powershell
 python -m UnityInfoMCP
 ```
 
-That usually means Python's user `Scripts` directory is not on `PATH`.
-In this environment, the generated launcher is installed at:
+Run on another HTTP port:
 
-```text
-C:\Users\USER\AppData\Local\Python\pythoncore-3.12-64\Scripts\unity-info-mcp.exe
-```
-
-Run it on a different port:
-
-```bash
+```powershell
 unity-info-mcp --port 8080
 ```
 
-Run it over stdio instead:
+Run over stdio for clients that launch the process directly:
 
-```bash
+```powershell
 unity-info-mcp --transport stdio
 ```
 
-Behavior:
-- default MCP transport: Streamable HTTP
-- optional MCP transport: stdio via `--transport stdio`
-- default HTTP bind: `127.0.0.1:16000`
-- default HTTP MCP endpoint: `http://127.0.0.1:16000/mcp`
-- `--port` is only valid when `--transport streamable-http` is in use
-- startup failure: prints the error; interactive HTTP launches wait for `Enter`, stdio exits immediately
+## MCP Client Configuration
 
-## MCP client configuration
-
-`UnityInfoMCP` supports both Streamable HTTP and stdio on the client-facing side.
-
-For URL-based MCP clients, connect to:
+URL-based MCP clients should connect to:
 
 ```text
 http://127.0.0.1:16000/mcp
 ```
 
-If you launch the server on a custom port, use the matching endpoint instead:
+For process-launching clients, use stdio mode.
 
-```text
-http://127.0.0.1:8080/mcp
-```
-
-For process-launching MCP clients, launch the server in stdio mode:
-
-```text
-unity-info-mcp --transport stdio
-```
-
-Bridge-side environment variables are still useful in both modes:
-
-```powershell
-$env:UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
-$env:UNITY_INFO_BRIDGE_PORT = "16000"
-unity-info-mcp --transport stdio
-```
-
-Important notes:
-- `UNITY_INFO_BRIDGE_PORT=16000` is only a legacy fallback bridge port
-- normal bridge discovery still probes `16001~16100`
-- `--port` only affects `--transport streamable-http`
-- `--transport stdio` does not expose `/mcp`; the client must speak MCP over the launched process stdio
-
-Recommended auto-launch examples:
-
-Codex `config.toml`:
+Codex `config.toml` example:
 
 ```toml
 [mcp_servers.UnityInfoMCP]
-command = "C:\\MCP\\UnityInfoMCP_v1.0.2.exe"
+command = "C:\\MCP\\UnityInfoMCP_vx.x.x.exe"
 args = ["--transport", "stdio"]
 startup_timeout_sec = 45
 
@@ -159,13 +115,13 @@ UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
 UNITY_INFO_BRIDGE_PORT = "16000"
 ```
 
-Claude Desktop `claude_desktop_config.json`:
+Claude Desktop `claude_desktop_config.json` example:
 
 ```json
 {
   "mcpServers": {
     "UnityInfoMCP": {
-      "command": "C:\\MCP\\UnityInfoMCP_v1.0.2.exe",
+      "command": "C:\\MCP\\UnityInfoMCP_vx.x.x.exe",
       "args": ["--transport", "stdio"],
       "env": {
         "UNITY_INFO_BRIDGE_HOST": "127.0.0.1",
@@ -176,96 +132,31 @@ Claude Desktop `claude_desktop_config.json`:
 }
 ```
 
-## Direct execution
+## Environment Variables
 
-You can also run `UnityInfoMCP` directly outside MCP client configuration.
+| Variable | Default | Purpose |
+|---|---|---|
+| `UNITY_INFO_BRIDGE_TRANSPORT` | `tcp` | Transport between the MCP server and game bridge. Only TCP is currently implemented. |
+| `UNITY_INFO_BRIDGE_HOST` | `127.0.0.1` | Bridge host. |
+| `UNITY_INFO_BRIDGE_PORT` | `16000` | Legacy fallback bridge port. Auto discovery still scans `16001~16100`. |
+| `UNITY_INFO_BRIDGE_TIMEOUT_SEC` | `8.0` | Bridge request timeout. |
+| `UNITY_INFO_MCP_NAME` | `UnityInfoMCP` | MCP server name. |
+| `UNITY_INFO_MCP_LOG_LEVEL` | `INFO` | Python log level. |
 
-When `unity-info-mcp` is available on `PATH`:
+See `.env.example` for a copyable template.
 
-```bash
-unity-info-mcp
-```
+## Build UnityInfoBridge
 
-When you prefer stdio transport:
+The bridge project uses local reference DLLs from `UnityInfoBridge/includes` and does not require an external dependency sync step.
 
-```bash
-unity-info-mcp --transport stdio
-```
-
-When you prefer to invoke the module directly:
-
-```bash
-python -m UnityInfoMCP
-```
-
-To run the module in stdio mode:
-
-```bash
-python -m UnityInfoMCP --transport stdio
-```
-
-To bind HTTP on a different port:
-
-```bash
-unity-info-mcp --port 8080
-```
-
-If you built the PyInstaller executable, you can launch it directly as well:
-
-```powershell
-& "C:\path\to\UnityInfoMCP_v1.0.2.exe"
-```
-
-Or in stdio mode:
-
-```powershell
-& "C:\path\to\UnityInfoMCP_v1.0.2.exe" --transport stdio
-```
-
-In all of these direct-launch cases, `UnityInfoMCP` starts the selected client-facing transport. Streamable HTTP exposes `/mcp` on the selected port, while stdio does not bind an HTTP port.
-
-## Environment variables
-
-- `UNITY_INFO_BRIDGE_TRANSPORT`
-  Default: `tcp`
-  Transport used between `UnityInfoMCP` and the game-side `UnityInfoBridge`
-- `UNITY_INFO_BRIDGE_HOST`
-  Default: `127.0.0.1`
-- `UNITY_INFO_BRIDGE_PORT`
-  Default: `16000`
-  Legacy fallback bridge port only. Auto-discovery still probes `16001~16100`.
-- `UNITY_INFO_BRIDGE_TIMEOUT_SEC`
-  Default: `8.0`
-- `UNITY_INFO_MCP_NAME`
-  Default: `UnityInfoMCP`
-- `UNITY_INFO_MCP_LOG_LEVEL`
-  Default: `INFO`
-
-Use `.env.example` as a starting point if needed.
-
-## Building UnityInfoBridge
-
-Build inputs:
-- bridge references are resolved from `UnityInfoBridge/includes`
-- the project only uses local reference DLLs under:
-  `UnityInfoBridge/includes/bepinex/mono`
-  `UnityInfoBridge/includes/bepinex/il2cpp`
-  `UnityInfoBridge/includes/melonloader/mono`
-  `UnityInfoBridge/includes/melonloader/il2cpp`
-  `UnityInfoBridge/includes/unity/mono`
-  `UnityInfoBridge/includes/unity/il2cpp`
-- `UnityInfoBridge/build.ps1` builds all supported variants
-
-The repository already includes the required reference DLLs, so builds do not depend on any extra sync step.
-
-Typical build:
+Build all supported variants:
 
 ```powershell
 Set-Location UnityInfoBridge
 .\build.ps1
 ```
 
-Build specific targets:
+Build a specific variant:
 
 ```powershell
 Set-Location UnityInfoBridge
@@ -273,17 +164,18 @@ Set-Location UnityInfoBridge
 ```
 
 Build outputs:
+
 - `UnityInfoBridge/Release/UnityInfoBridge.BepInEx.Mono/`
 - `UnityInfoBridge/Release/UnityInfoBridge.BepInEx.IL2CPP/`
 - `UnityInfoBridge/Release/UnityInfoBridge.MelonLoader.Mono/`
 - `UnityInfoBridge/Release/UnityInfoBridge.MelonLoader.IL2CPP/`
 
-Each output now includes the bridge assembly plus `Newtonsoft.Json.dll`.
-IL2CPP outputs also include `UnityInfoBridge.*.deps.json`.
+Each output includes the bridge assembly and `Newtonsoft.Json.dll`. IL2CPP outputs also include `UnityInfoBridge.*.deps.json`.
 
-## Release assets
+## Release Packages
 
-The GitHub release workflow produces:
+The release workflow produces:
+
 - `UnityInfoMCP_vx.x.x.exe`
 - `UnityInfoMCP-vx.x.x.tar.gz`
 - `UnityInfoMCP-vx.x.x-py3-none-any.whl`
@@ -293,79 +185,52 @@ The GitHub release workflow produces:
 - `UnityInfoBridge_vx.x.x_BepInEx_IL2CPP.zip`
 - `SHA256SUMS.txt`
 
-Package structure:
-- MelonLoader Mono zip:
-  `Mods/UnityInfoBridge.dll`
-  `Mods/Newtonsoft.Json.dll`
-- MelonLoader IL2CPP zip:
-  `Mods/UnityInfoBridge.dll`
-  `Mods/Newtonsoft.Json.dll`
-  `Mods/UnityInfoBridge.deps.json`
-- BepInEx Mono zip:
-  `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`
-  `BepInEx/plugins/UnityInfoBridge/Newtonsoft.Json.dll`
-- BepInEx IL2CPP zip:
-  `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`
-  `BepInEx/plugins/UnityInfoBridge/Newtonsoft.Json.dll`
-  `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.deps.json`
+Release versioning comes from `version.txt`. Update that file once, then run the release workflow.
 
-## MCP tool surface
+Bridge zip layout:
 
-Runtime:
-- `bridge_status`
-- `list_bridge_targets`
-- `select_bridge_target`
-- `get_runtime_summary`
+| Package | Files |
+|---|---|
+| MelonLoader Mono | `Mods/UnityInfoBridge.dll`, `Mods/Newtonsoft.Json.dll` |
+| MelonLoader IL2CPP | `Mods/UnityInfoBridge.dll`, `Mods/Newtonsoft.Json.dll`, `Mods/UnityInfoBridge.deps.json` |
+| BepInEx Mono | `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`, `BepInEx/plugins/UnityInfoBridge/Newtonsoft.Json.dll` |
+| BepInEx IL2CPP | `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.dll`, `BepInEx/plugins/UnityInfoBridge/Newtonsoft.Json.dll`, `BepInEx/plugins/UnityInfoBridge/UnityInfoBridge.deps.json` |
 
-Scene and hierarchy:
-- `list_scenes`
-- `get_scene_hierarchy`
-- `find_gameobjects_by_name`
-- `resolve_instance_id`
-- `get_gameobject`
-- `get_gameobject_by_path`
-- `get_gameobject_children`
+Extract the bridge zip that matches the game's loader/runtime into the game root.
 
-Components and fields:
-- `get_components`
-- `get_component`
-- `get_component_fields`
-- `search_component_fields`
+## MCP Tool Surface
 
-Text and localization discovery:
-- `list_text_elements`
-- `search_text`
-- `get_text_context`
+The public tools are registered with MCP-standard discovery metadata:
 
-Snapshots:
-- `snapshot_gameobject`
-- `snapshot_scene`
+- `title`: short display name for clients and tool pickers.
+- `description`: model-facing usage guidance.
+- `inputSchema` property descriptions and ranges.
+- `annotations.readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`.
+- `_meta.unityInfoMcp.category` and `_meta.unityInfoMcp.bridgeMethods` for clients that preserve `_meta`.
 
-Write operations:
-- `set_gameobject_active`
-- `set_component_member`
-- `set_text`
+Tool groups:
 
-Capture:
-- `capture_screenshot`
+| Group | Tools |
+|---|---|
+| Bridge/runtime | `bridge_status`, `list_bridge_targets`, `select_bridge_target`, `get_runtime_summary` |
+| Scene and hierarchy | `list_scenes`, `get_scene_hierarchy`, `find_gameobjects_by_name`, `resolve_instance_id`, `get_gameobject`, `get_gameobject_by_path`, `get_gameobject_children` |
+| Components and fields | `get_components`, `get_component`, `get_component_fields`, `search_component_fields` |
+| Text and localization | `list_text_elements`, `search_text`, `get_text_context` |
+| Snapshots | `snapshot_gameobject`, `snapshot_scene` |
+| Live edits | `set_gameobject_active`, `set_component_member`, `set_text` |
+| Capture | `capture_screenshot` |
 
 Notes:
-- text and hierarchy discovery includes persistent `DontDestroyOnLoad` UI when Unity exposes it as a valid runtime scene object
-- `capture_screenshot` returns PNG image content to the MCP client
-- when `output_path` is omitted, the bridge uses `GameRoot\UnityInfoBridge\captures\capture_yy-MM-dd-HH-mm-ss-fff.png` as a temporary capture path and `UnityInfoMCP` removes the temp file after embedding the image
-- provide `output_path` if you want the PNG to remain on disk after the MCP response
 
-## Example workflow
+- Text and hierarchy tools include persistent `DontDestroyOnLoad` UI when Unity exposes it as a valid runtime scene object.
+- Live-edit tools change the running game only; they do not patch game assets.
+- `capture_screenshot` returns PNG image content to the MCP client.
+- If `output_path` is omitted, the bridge writes a temporary capture under `GameRoot\UnityInfoBridge\captures\` and the MCP server deletes it after embedding the image.
+- Provide `output_path` when the PNG should remain on disk.
+
+## Example Workflow
 
 Find which font a live dialogue line is using:
-
-User prompt:
-
-```text
-"어디까지나 이리스의 의견이니까"라는 텍스트가 어느 폰트를 사용하고 있는지 알려줘.
-```
-
-Primary tool call:
 
 ```json
 UnityInfoMCP.search_text({
@@ -375,30 +240,15 @@ UnityInfoMCP.search_text({
 })
 ```
 
-Typical result summary:
-- scene: `Search`
-- object path: `_root/Canvas2/ScreenScaler2/GameObject/messagewindow/messagearea/text_message (TMP)`
-- component type: `TMPro.TextMeshProUGUI`
-- current TMP font asset: `message#en-font`
-
-Move the same text up by `100px`:
-
-User prompt:
-
-```text
-그 텍스트를 위로 100px 올려줘.
-```
-
-Tool flow:
+Typical follow-up:
 
 ```json
-UnityInfoMCP.get_components({
-  "gameobject_instance_id": 480506,
-  "include_fields": true,
-  "include_non_public": false,
-  "field_depth": 1
+UnityInfoMCP.get_text_context({
+  "component_instance_id": 485632
 })
 ```
+
+Move the owning UI object up by changing its `RectTransform.anchoredPosition`:
 
 ```json
 UnityInfoMCP.set_component_member({
@@ -409,26 +259,9 @@ UnityInfoMCP.set_component_member({
 })
 ```
 
-Verification:
-
-```json
-UnityInfoMCP.get_component_fields({
-  "component_instance_id": 485632,
-  "include_non_public": false,
-  "include_properties": true,
-  "max_depth": 1
-})
-```
-
-Typical result summary:
-- target component: `UnityEngine.RectTransform`
-- `anchoredPosition`: `(0.0, -358.0)` -> `(0.0, -258.0)`
-- effective change: moved upward by `100px`
-
-Runtime object IDs such as `480506` and `485632` are example values and will differ each session.
-For common Unity structs, tuple-style strings such as `"(0, -258)"` also work.
+Runtime object and component IDs are session-specific. Re-discover them with `search_text`, `find_gameobjects_by_name`, `get_components`, or snapshots for each new game run.
 
 ## Documentation
 
 - Bridge protocol: `docs/bridge-protocol.md`
-- Tool mapping: `docs/tool-catalog.md`
+- Tool catalog: `docs/tool-catalog.md`

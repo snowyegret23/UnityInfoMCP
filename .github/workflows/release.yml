@@ -2,12 +2,6 @@ name: Build and Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: "릴리즈 버전 (예: 1.0.1)"
-        required: true
-        default: "1.0.1"
-        type: string
 
 permissions:
   contents: write
@@ -15,12 +9,21 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
-    env:
-      VERSION: ${{ inputs.version }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Read release version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content version.txt -Raw).Trim()
+          if ($version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "version.txt must use X.Y.Z format. Received: $version"
+          }
+
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -28,7 +31,7 @@ jobs:
           python-version: "3.12"
 
       - name: Set up .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: "8.0.x"
 
@@ -38,12 +41,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[build]"
 
-      - name: Validate release version
+      - name: Verify release version
         shell: pwsh
         run: |
-          $pyproject = Get-Content pyproject.toml -Raw
-          if ($pyproject -notmatch 'version = "${{ inputs.version }}"') {
-            throw "pyproject.toml version does not match workflow input (${{ inputs.version }})."
+          $packageVersion = python -c "from importlib.metadata import version; print(version('unity-info-mcp'))"
+          if ($packageVersion -ne $env:VERSION) {
+            throw "Installed Python package version ($packageVersion) does not match version.txt ($env:VERSION)."
           }
 
       - name: Build Python package
@@ -178,20 +181,20 @@ jobs:
           git push origin v${env:VERSION}
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ inputs.version }}
-          name: v${{ inputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
           draft: true
           generate_release_notes: true
           files: |
-            UnityInfoMCP_v${{ inputs.version }}.exe
-            UnityInfoMCP-v${{ inputs.version }}.tar.gz
-            UnityInfoMCP-v${{ inputs.version }}-py3-none-any.whl
-            UnityInfoBridge_v${{ inputs.version }}_MelonLoader_Mono.zip
-            UnityInfoBridge_v${{ inputs.version }}_MelonLoader_IL2CPP.zip
-            UnityInfoBridge_v${{ inputs.version }}_BepInEx_Mono.zip
-            UnityInfoBridge_v${{ inputs.version }}_BepInEx_IL2CPP.zip
+            UnityInfoMCP_v${{ steps.version.outputs.version }}.exe
+            UnityInfoMCP-v${{ steps.version.outputs.version }}.tar.gz
+            UnityInfoMCP-v${{ steps.version.outputs.version }}-py3-none-any.whl
+            UnityInfoBridge_v${{ steps.version.outputs.version }}_MelonLoader_Mono.zip
+            UnityInfoBridge_v${{ steps.version.outputs.version }}_MelonLoader_IL2CPP.zip
+            UnityInfoBridge_v${{ steps.version.outputs.version }}_BepInEx_Mono.zip
+            UnityInfoBridge_v${{ steps.version.outputs.version }}_BepInEx_IL2CPP.zip
             SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

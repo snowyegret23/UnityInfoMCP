@@ -4,18 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "unity-info-mcp"
-version = "1.0.2"
 description = "Standalone MCP server for Unity runtime inspection (modding/localization workflows)."
 readme = "README.md"
 requires-python = ">=3.10"
+dynamic = ["version"]
 dependencies = [
-  "mcp>=1.6.0",
+  "mcp>=1.27.0",
+  "pydantic>=2.0",
 ]
 
 [project.optional-dependencies]
 build = [
   "build>=1.2.0",
-  "mcp[cli]>=1.6.0",
+  "mcp[cli]>=1.27.0",
   "pyinstaller>=6.0",
 ]
 
@@ -25,3 +26,6 @@ unity-info-mcp = "UnityInfoMCP.__main__:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["UnityInfoMCP*"]
+
+[tool.setuptools.dynamic]
+version = {file = ["version.txt"]}

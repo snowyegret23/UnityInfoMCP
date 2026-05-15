@@ -8,6 +8,7 @@
     <Nullable>disable</Nullable>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <Configurations>Release_BepInEx_Mono;Release_BepInEx_IL2CPP;Release_MelonLoader_Mono;Release_MelonLoader_IL2CPP</Configurations>
+    <UnityInfoVersionFile>$(MSBuildProjectDirectory)\..\..\version.txt</UnityInfoVersionFile>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)'=='Release_BepInEx_Mono'">
@@ -161,4 +162,23 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <Target Name="GeneratePluginVersion" BeforeTargets="CoreCompile">
+    <Error Condition="!Exists('$(UnityInfoVersionFile)')" Text="Missing version file: $(UnityInfoVersionFile)" />
+    <ReadLinesFromFile File="$(UnityInfoVersionFile)">
+      <Output TaskParameter="Lines" ItemName="UnityInfoVersionLines" />
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <UnityInfoVersion>@(UnityInfoVersionLines)</UnityInfoVersion>
+    </PropertyGroup>
+    <Error Condition="'$(UnityInfoVersion)' == ''" Text="Version file is empty: $(UnityInfoVersionFile)" />
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile
+      File="$(IntermediateOutputPath)PluginVersion.g.cs"
+      Lines="namespace UnityInfoBridge { internal static partial class PluginMetadata { internal const string Version = &quot;$(UnityInfoVersion)&quot;%3B } }"
+      Overwrite="true" />
+    <ItemGroup>
+      <Compile Include="$(IntermediateOutputPath)PluginVersion.g.cs" />
+    </ItemGroup>
+  </Target>
 </Project>
