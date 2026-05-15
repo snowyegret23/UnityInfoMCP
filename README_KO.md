@@ -54,7 +54,13 @@ UnityInfoMCP는 실행 중인 Unity 게임을 AI 클라이언트에서 조사하
 
 ## 설치와 실행
 
-가상환경을 만들고 Python MCP 서버를 설치합니다.
+PyPI에서 MCP 서버를 설치합니다.
+
+```powershell
+pip install unity-info-mcp
+```
+
+로컬 개발용으로는 가상환경을 만들고 editable mode로 설치합니다.
 
 ```powershell
 python -m venv .venv
@@ -66,12 +72,6 @@ pip install -e .
 
 ```powershell
 pip install -e ".[build]"
-```
-
-PyPI에 릴리즈가 배포된 뒤에는 다음처럼 MCP 서버를 설치할 수 있습니다.
-
-```powershell
-pip install unity-info-mcp
 ```
 
 기본 Streamable HTTP transport로 MCP 서버 실행:
@@ -108,7 +108,22 @@ http://127.0.0.1:16000/mcp
 
 프로세스를 직접 실행하는 클라이언트는 stdio 모드를 사용합니다.
 
-Codex `config.toml` 예시:
+PyPI/로컬 Python 설치용 Codex `config.toml` 예시:
+
+```toml
+[mcp_servers.UnityInfoMCP]
+command = "python"
+args = ["-m", "UnityInfoMCP", "--transport", "stdio"]
+startup_timeout_sec = 45
+
+[mcp_servers.UnityInfoMCP.env]
+UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+UNITY_INFO_BRIDGE_PORT = "16000"
+```
+
+`python`이 `unity-info-mcp`를 설치한 환경을 가리키지 않는다면 해당 환경의 `python.exe` 전체 경로를 사용하세요.
+
+독립 실행 파일용 Codex `config.toml` 예시:
 
 ```toml
 [mcp_servers.UnityInfoMCP]
@@ -121,7 +136,24 @@ UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
 UNITY_INFO_BRIDGE_PORT = "16000"
 ```
 
-Claude Desktop `claude_desktop_config.json` 예시:
+PyPI/로컬 Python 설치용 Claude Desktop `claude_desktop_config.json` 예시:
+
+```json
+{
+  "mcpServers": {
+    "UnityInfoMCP": {
+      "command": "python",
+      "args": ["-m", "UnityInfoMCP", "--transport", "stdio"],
+      "env": {
+        "UNITY_INFO_BRIDGE_HOST": "127.0.0.1",
+        "UNITY_INFO_BRIDGE_PORT": "16000"
+      }
+    }
+  }
+}
+```
+
+독립 실행 파일용 Claude Desktop `claude_desktop_config.json` 예시:
 
 ```json
 {

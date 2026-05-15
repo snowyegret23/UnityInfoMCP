@@ -54,7 +54,13 @@ The single source of truth for release/local build versioning is `version.txt` i
 
 ## Install And Run
 
-Create a virtual environment and install the Python MCP server:
+Install the MCP server from PyPI:
+
+```powershell
+pip install unity-info-mcp
+```
+
+For local development, create a virtual environment and install the package in editable mode:
 
 ```powershell
 python -m venv .venv
@@ -66,12 +72,6 @@ For release packaging or PyInstaller builds:
 
 ```powershell
 pip install -e ".[build]"
-```
-
-After a release has been published to PyPI, install the MCP server with:
-
-```powershell
-pip install unity-info-mcp
 ```
 
 Run the MCP server with the default Streamable HTTP transport:
@@ -108,7 +108,22 @@ http://127.0.0.1:16000/mcp
 
 For process-launching clients, use stdio mode.
 
-Codex `config.toml` example:
+Codex `config.toml` example for a PyPI/local Python install:
+
+```toml
+[mcp_servers.UnityInfoMCP]
+command = "python"
+args = ["-m", "UnityInfoMCP", "--transport", "stdio"]
+startup_timeout_sec = 45
+
+[mcp_servers.UnityInfoMCP.env]
+UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
+UNITY_INFO_BRIDGE_PORT = "16000"
+```
+
+If `python` does not resolve to the environment where `unity-info-mcp` is installed, use the full path to that environment's `python.exe`.
+
+Codex `config.toml` example for the standalone executable:
 
 ```toml
 [mcp_servers.UnityInfoMCP]
@@ -121,7 +136,24 @@ UNITY_INFO_BRIDGE_HOST = "127.0.0.1"
 UNITY_INFO_BRIDGE_PORT = "16000"
 ```
 
-Claude Desktop `claude_desktop_config.json` example:
+Claude Desktop `claude_desktop_config.json` example for a PyPI/local Python install:
+
+```json
+{
+  "mcpServers": {
+    "UnityInfoMCP": {
+      "command": "python",
+      "args": ["-m", "UnityInfoMCP", "--transport", "stdio"],
+      "env": {
+        "UNITY_INFO_BRIDGE_HOST": "127.0.0.1",
+        "UNITY_INFO_BRIDGE_PORT": "16000"
+      }
+    }
+  }
+}
+```
+
+Claude Desktop `claude_desktop_config.json` example for the standalone executable:
 
 ```json
 {
