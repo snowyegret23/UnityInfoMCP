@@ -48,11 +48,14 @@ def _wait_for_exit(exc: BaseException, *, pause: bool) -> None:
 def main(argv: list[str] | None = None) -> None:
     args = _parse_args(argv)
     transport = args.transport
+    run_kwargs: dict[str, object] = {"transport": transport}
     if transport == "streamable-http":
-        mcp.settings.port = args.port if args.port is not None else DEFAULT_MCP_PORT
+        run_kwargs["port"] = (
+            args.port if args.port is not None else DEFAULT_MCP_PORT
+        )
 
     try:
-        mcp.run(transport=transport)
+        mcp.run(**run_kwargs)
     except KeyboardInterrupt:
         return
     except BaseException as exc:

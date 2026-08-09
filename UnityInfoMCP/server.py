@@ -7,8 +7,8 @@ import logging
 import os
 from typing import Annotated, Any, Literal
 
-from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp.utilities.types import Image
+from mcp.server import MCPServer
+from mcp.server.mcpserver import Image
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import Field
 
@@ -20,7 +20,7 @@ CONFIG = ServerConfig.from_env()
 logging.basicConfig(level=getattr(logging, CONFIG.log_level, logging.INFO))
 logger = logging.getLogger("unity_info_mcp")
 
-mcp = FastMCP(CONFIG.name)
+mcp = MCPServer(CONFIG.name)
 
 BRIDGE_PORT_RANGE_START = 16001
 BRIDGE_PORT_RANGE_END = 16100

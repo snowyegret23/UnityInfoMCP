@@ -35,7 +35,7 @@ Important details:
 ## Requirements
 
 - Python 3.10+
-- `mcp>=1.27.0`
+- `mcp>=2.0.0,<3`
 - `pydantic>=2.0`
 - .NET SDK 8.0+ when building `UnityInfoBridge`
 - A supported Unity mod loader for the bridge plugin:

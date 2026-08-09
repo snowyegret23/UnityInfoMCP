@@ -35,7 +35,7 @@ UnityInfoMCP는 실행 중인 Unity 게임을 AI 클라이언트에서 조사하
 ## 요구 사항
 
 - Python 3.10+
-- `mcp>=1.27.0`
+- `mcp>=2.0.0,<3`
 - `pydantic>=2.0`
 - `UnityInfoBridge` 빌드 시 .NET SDK 8.0+
 - 지원되는 Unity 모드 로더:
